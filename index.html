@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GainsBio — Field & Investor Data Extractor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+  <!-- Top Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-400 font-semibold text-xs border border-emerald-500/30">SHEETS SYNC</span>
+        <h1 class="font-bold text-lg tracking-tight">GainsBio Field & Investor Extractor</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="userEmail" class="text-xs text-slate-400 hidden sm:inline"></span>
+        <button id="loginBtn" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition">
+          Sign in with Google
+        </button>
+        <button id="logoutBtn" class="hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Left Column: Capture -->
+    <section class="lg:col-span-5 space-y-5">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-base text-slate-200">1. Capture Screenshot, Link, or Notes</h2>
+
+        <label id="dropZone" class="block border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-xl p-4 text-center cursor-pointer transition bg-slate-950/50">
+          <input id="imageInput" type="file" accept="image/*" class="hidden" />
+          <p class="text-sm text-slate-300 font-medium">Tap to upload or paste screenshot (<kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-xs">Ctrl+V</kbd>)</p>
+          <p class="text-xs text-slate-500 mt-1">LinkedIn profiles, trial data, call notes, emails</p>
+          <img id="imagePreview" class="hidden mt-3 max-h-44 mx-auto rounded-lg border border-slate-700" />
+        </label>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Link / URL</label>
+          <input id="urlInput" type="url" placeholder="https://linkedin.com/in/... or website"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Notes / Pasted Text</label>
+          <textarea id="notesInput" rows="3" placeholder="Paste email, call summary, or field trial update..."
+                    class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-sm focus:outline-none focus:border-emerald-500"></textarea>
+        </div>
+
+        <button id="scanBtn" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 font-semibold text-sm text-white transition">
+          Scan & Extract with Gemini AI
+        </button>
+        <p id="statusMsg" class="text-xs text-amber-300 text-center min-h-[1rem] font-medium"></p>
+      </div>
+    </section>
+
+    <!-- Right Column: Verify & Append to Google Sheet -->
+    <section class="lg:col-span-7">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <h2 class="font-semibold text-base text-slate-200">2. Verify & Append to Google Sheet</h2>
+          <select id="targetSelect" class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-semibold text-emerald-400">
+            <optgroup label="Field Trials 2027">
+              <option value="field_trials::Organisations">Field Trials → Organisations</option>
+              <option value="field_trials::Contacts">Field Trials → Contacts</option>
+              <option value="field_trials::Activity Log">Field Trials → Activity Log</option>
+              <option value="field_trials::Field Trials & Pipeline">Field Trials → Field Trials & Pipeline</option>
+            </optgroup>
+            <optgroup label="VCs & Angels">
+              <option value="investors::VC Organisations">VCs & Angels → VC Organisations</option>
+              <option value="investors::VC Contacts">VCs & Angels → VC Contacts</option>
+              <option value="investors::Activity Log">VCs & Angels → Activity Log</option>
+              <option value="investors::Fundraising Pipeline">VCs & Angels → Fundraising Pipeline</option>
+              <option value="investors::Angel Groups">VCs & Angels → Angel Groups</option>
+              <option value="investors::Angel Contacts">VCs & Angels → Angel Contacts</option>
+              <option value="investors::Angel Activity Log">VCs & Angels → Angel Activity Log</option>
+              <option value="investors::Angel Pipeline">VCs & Angels → Angel Pipeline</option>
+              <option value="investors::VC Sheet on LinkedIn">VCs & Angels → VC Sheet on LinkedIn</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div id="dynamicFields" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+        <div class="pt-2 flex flex-col sm:flex-row gap-3">
+          <button id="saveBtn" class="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 font-semibold text-sm text-white transition">
+            Append Row to Google Sheet
+          </button>
+          <a id="openSheetLink" href="https://docs.google.com/spreadsheets/d/1LUAKQQmmaP589uD0zmiXe7pgH-syPvYym3ODE3LyLUQ/edit" target="_blank"
+             class="px-4 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 text-center transition">
+            Open Sheet ↗
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+    import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app-check.js";
+    import { getAuth, signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+    import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-ai.js";
+
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIJAQaWt62OYkQ1gog02aRaTRMSolTz3RjlgNxjRCDCtxZ7-9y6bg1EgluydwzHgQ/exec";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB-GmnbVH_Hp8tq0LSB40a1tgiAI_uJHSQ",
+      authDomain: "data-extractor-f4f99.firebaseapp.com",
+      projectId: "data-extractor-f4f99",
+      storageBucket: "data-extractor-f4f99.firebasestorage.app",
+      messagingSenderId: "866172598418",
+      appId: "1:866172598418:web:db986247756c56e354ce4b",
+      measurementId: "G-3J41DDY0G9"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider("6Lf7aCEuAAAAAJZjOPMFd6gInCMrYiqMzqLSikQa"),
+      isTokenAutoRefreshEnabled: true
+    });
+
+    const auth = getAuth(app);
+    const ai = getAI(app, { backend: new GoogleAIBackend() });
+    const model = getGenerativeModel(ai, { model: "gemini-3.8-flash" });
+
+    // Exact Row 1 column headers for all 13 tabs across both Google Sheets
+    const TAB_SCHEMAS = {
+      "field_trials::Organisations": [
+        "Organisation Name", "Umbrella Company", "Business Model", "Scale & Reach (ha/growers)",
+        "Account Status", "Relationship Owner", "Last Contacted", "Latest Interaction Summary",
+        "Focus Crops", "Strategic Notes", "Total Trials"
+      ],
+      "field_trials::Contacts": [
+        "Contact Name", "Organisation", "Role / Title", "Email", "Phone", "Relationship Owner", "Notes"
+      ],
+      "field_trials::Activity Log": [
+        "Interaction Date", "Organisation", "Contact Person", "Interaction Type",
+        "Discussion Summary & Notes", "Key Decisions / Outcome", "Next Action", "Next Action Due Date", "Logged By"
+      ],
+      "field_trials::Field Trials & Pipeline": [
+        "Trial Season", "Organisation", "Crop Type(s)", "Treatment Type", "Trial Status",
+        "Agreement Signed", "Trial Start Date", "Assessment Date", "Site / Location",
+        "Trial Objective / KPIs", "Commercial Stage", "Opportunity Type",
+        "Est. Annual Volume (ha)", "Est. Annual Revenue (£)", "Win Probability %", "Weighted Value (£)"
+      ],
+      "investors::VC Organisations": [
+        "Organisation Name", "Priority Tier", "Account Status", "Relationship Owner",
+        "Investment Scope", "Investment Stage", "Ticket Size", "Location Focus", "Website", "Strategic Notes / Thesis Fit"
+      ],
+      "investors::VC Contacts": [
+        "Contact Name", "Organisation", "Role / Title", "Relationship Owner",
+        "Email / LinkedIn", "Warmth Rating (1-3)", "Key Notes"
+      ],
+      "investors::Activity Log": [
+        "Interaction Date", "Organisation", "Contact Person", "Interaction Type",
+        "Discussion Summary & Notes", "Key Decisions / Outcome", "Next Action", "Next Action Due Date", "Logged By"
+      ],
+      "investors::Fundraising Pipeline": [
+        "Organisation", "Primary Contact", "Deal Stage", "Target Ticket Size (£)",
+        "Win Probability %", "Weighted Value (£)", "Target Round", "Next Milestone"
+      ],
+      "investors::Angel Groups": [
+        "Organisation Name", "Priority Tier", "Account Status", "Relationship Owner",
+        "Investment Scope", "Investment Stage", "Ticket Size", "Location Focus", "Website", "Strategic Notes / Thesis Fit"
+      ],
+      "investors::Angel Contacts": [
+        "Contact Name", "Organisation", "Role / Title", "Relationship Owner",
+        "Email / LinkedIn", "Warmth Rating (1-3)", "Key Notes"
+      ],
+      "investors::Angel Activity Log": [
+        "Interaction Date", "Organisation", "Contact Person", "Interaction Type",
+        "Discussion Summary & Notes", "Key Decisions / Outcome", "Next Action", "Next Action Due Date", "Logged By"
+      ],
+      "investors::Angel Pipeline": [
+        "Organisation", "Primary Contact", "Deal Stage", "Target Ticket Size (£)",
+        "Win Probability %", "Weighted Value (£)", "Target Round", "Next Milestone"
+      ],
+      "investors::VC Sheet on LinkedIn": [
+        "Name", "Investment Scope", "Website", "Location Focus", "Investment Stage",
+        "Ticket Size", "Description", "Partners", "Location", "Launch of Latest Fund", "Fund Size"
+      ]
+    };
+
+    const SHEET_URLS = {
+      field_trials: "https://docs.google.com/spreadsheets/d/1k53Ema_iCt5_bx7c33As4yWDXWVgGqnqqvbuUzQD-uQ/edit",
+      investors: "https://docs.google.com/spreadsheets/d/1LUAKQQmmaP589uD0zmiXe7pgH-syPvYym3ODE3LyLUQ/edit"
+    };
+
+    let selectedImageBase64 = null;
+    let selectedImageMime = null;
+    let currentUser = null;
+
+    const targetSelect = document.getElementById("targetSelect");
+    const dynamicFieldsEl = document.getElementById("dynamicFields");
+    const statusMsg = document.getElementById("statusMsg");
+    const openSheetLink = document.getElementById("openSheetLink");
+
+    function renderForm(targetKey, values = {}) {
+      const columns = TAB_SCHEMAS[targetKey] || [];
+      const [spreadsheetKey] = targetKey.split("::");
+      openSheetLink.href = SHEET_URLS[spreadsheetKey];
+
+      dynamicFieldsEl.innerHTML = columns.map((col, idx) => `
+        <div class="${col.includes("Notes") || col.includes("Summary") || col.includes("Objective") || col.includes("Description") ? "sm:col-span-2" : ""}">
+          <label class="block text-xs text-slate-400 mb-1">${col}</label>
+          <input data-col-index="${idx}" value="${String(values[col] || "").replace(/"/g, "&quot;")}"
+                 class="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+      `).join("");
+    }
+
+    renderForm(targetSelect.value);
+    targetSelect.addEventListener("change", () => renderForm(targetSelect.value));
+
+    function loadImageFile(file) {
+      if (!file) return;
+      selectedImageMime = file.type;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const preview = document.getElementById("imagePreview");
+        preview.src = reader.result;
+        preview.classList.remove("hidden");
+        selectedImageBase64 = reader.result.split(",")[1];
+      };
+      reader.readAsDataURL(file);
+    }
+
+    document.getElementById("imageInput").addEventListener("change", e => loadImageFile(e.target.files[0]));
+    window.addEventListener("paste", e => {
+      const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+      if (item) loadImageFile(item.getAsFile());
+    });
+
+    document.getElementById("loginBtn").onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
+    document.getElementById("logoutBtn").onclick = () => signOut(auth);
+
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      document.getElementById("loginBtn").classList.toggle("hidden", !!user);
+      document.getElementById("logoutBtn").classList.toggle("hidden", !user);
+      const emailEl = document.getElementById("userEmail");
+      emailEl.textContent = user ? user.email : "";
+      emailEl.classList.toggle("hidden", !user);
+    });
+
+    document.getElementById("scanBtn").onclick = async () => {
+      if (!currentUser) return alert("Please sign in with Google first.");
+      const url = document.getElementById("urlInput").value.trim();
+      const notes = document.getElementById("notesInput").value.trim();
+      if (!selectedImageBase64 && !url && !notes) return alert("Add a screenshot, URL, or note first.");
+
+      const scanBtn = document.getElementById("scanBtn");
+      scanBtn.disabled = true;
+      statusMsg.textContent = "Scanning with Gemini AI...";
+
+      try {
+        const schemaSummary = Object.entries(TAB_SCHEMAS)
+          .map(([k, cols]) => `- "${k}": [${cols.join(", ")}]`)
+          .join("\n");
+
+        const prompt = `You are a structured CRM & field trial data extractor for GainsBio (agricultural microbials spinout, UK).
+Inspect the provided image, URL, and/or notes. Pick the SINGLE best matching target tab from the list below and map the extracted details into its exact column headers.
+Today's date is ${new Date().toISOString().split("T")[0]}.
+
+Available targets and their exact column headers:
+${schemaSummary}
+
+Return ONLY valid JSON with no markdown fences in this exact format:
+{
+  "target": "exact key from list above, e.g. investors::VC Contacts",
+  "data": {
+    "Exact Column Header": "extracted value or empty string"
+  }
+}
+
+URL provided: ${url || "None"}
+Notes provided: ${notes || "None"}`;
+
+        const parts = [{ text: prompt }];
+        if (selectedImageBase64) {
+          parts.push({ inlineData: { data: selectedImageBase64, mimeType: selectedImageMime } });
+        }
+
+        const result = await model.generateContent(parts);
+        const raw = result.response.text().replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(raw);
+
+        if (TAB_SCHEMAS[parsed.target]) {
+          targetSelect.value = parsed.target;
+        }
+        renderForm(targetSelect.value, parsed.data || {});
+        statusMsg.textContent = "Extracted! Verify fields on the right and click Append Row.";
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = "Scan error: " + err.message;
+        alert("Scan error: " + err.message);
+      } finally {
+        scanBtn.disabled = false;
+      }
+    };
+
+    document.getElementById("saveBtn").onclick = async () => {
+      const [spreadsheetKey, tabName] = targetSelect.value.split("::");
+      const inputs = [...dynamicFieldsEl.querySelectorAll("input[data-col-index]")];
+      const rowValues = inputs.map(inp => inp.value.trim());
+
+      const saveBtn = document.getElementById("saveBtn");
+      saveBtn.disabled = true;
+      statusMsg.textContent = `Appending row to "${tabName}"...`;
+
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ spreadsheetKey, tabName, rowValues })
+        });
+
+        statusMsg.textContent = `Sent to "${tabName}"! Check your Google Sheet to confirm.`;
+        renderForm(targetSelect.value);
+        selectedImageBase64 = null;
+        document.getElementById("imagePreview").classList.add("hidden");
+        document.getElementById("urlInput").value = "";
+        document.getElementById("notesInput").value = "";
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = "Save failed: " + err.message;
+        alert("Save failed: " + err.message);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
